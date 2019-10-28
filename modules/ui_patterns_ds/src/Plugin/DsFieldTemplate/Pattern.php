@@ -2,6 +2,7 @@
 
 namespace Drupal\ui_patterns_ds\Plugin\DsFieldTemplate;
 
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\ds\Plugin\DsFieldTemplate\DsFieldTemplateBase;
 use Drupal\ui_patterns\Form\PatternDisplayFormTrait;
@@ -23,6 +24,13 @@ use Drupal\Core\Entity\EntityFieldManager;
 class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInterface {
 
   use PatternDisplayFormTrait;
+
+  /**
+   * Module Handler.
+   *
+   * @var \Drupal\Core\Extension\ModuleHandlerInterface
+   */
+  protected $moduleHandler = NULL;
 
   /**
    * UI Patterns manager.
@@ -62,20 +70,23 @@ class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInter
    * @param mixed $plugin_definition
    *   The plugin implementation definition.
    * @param \Drupal\ui_patterns\UiPatternsManager $patterns_manager
-   *    UI Patterns manager.
+   *   UI Patterns manager.
    * @param \Drupal\ui_patterns\UiPatternsSourceManager $source_manager
-   *    UI Patterns source manager.
+   *   UI Patterns source manager.
    * @param \Symfony\Component\HttpFoundation\RequestStack $parameters
-   *    Current $_POST parameters.
+   *   Current $_POST parameters.
    * @param \Drupal\Core\Entity\EntityFieldManager $field_manager
-   *    Field manager.
+   *   Field manager.
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+   *   Module handler.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, UiPatternsManager $patterns_manager, UiPatternsSourceManager $source_manager, RequestStack $parameters, EntityFieldManager $field_manager) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, UiPatternsManager $patterns_manager, UiPatternsSourceManager $source_manager, RequestStack $parameters, EntityFieldManager $field_manager, ModuleHandlerInterface $module_handler) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->patternsManager = $patterns_manager;
     $this->sourceManager = $source_manager;
     $this->parameters = $parameters->getCurrentRequest()->request;
     $this->fieldManager = $field_manager;
+    $this->moduleHandler = $module_handler;
   }
 
   /**
@@ -89,7 +100,8 @@ class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInter
       $container->get('plugin.manager.ui_patterns'),
       $container->get('plugin.manager.ui_patterns_source'),
       $container->get('request_stack'),
-      $container->get('entity_field.manager')
+      $container->get('entity_field.manager'),
+      $container->get('module_handler')
     );
   }
 
@@ -110,7 +122,7 @@ class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInter
    * Get source field plugin context.
    *
    * @return array
-   *    Context array.
+   *   Context array.
    */
   protected function getContext() {
     $fields = $this->parameters->get('fields');
@@ -131,7 +143,8 @@ class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInter
   public function defaultConfiguration() {
     return [
       'pattern' => '',
-      'pattern_mapping' => '',
+      'pattern_variant' => '',
+      'pattern_mapping' => [],
     ];
   }
 
@@ -139,10 +152,10 @@ class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInter
    * Get name of field currently being edited.
    *
    * @return string
-   *    Name of field currently being edited.
+   *   Name of field currently being edited.
    */
   protected function getCurrentField() {
-    $fields = array_filter($this->parameters->get('fields'), function ($field) {
+    $fields = array_filter($this->parameters->get('fields', []), function ($field) {
       return isset($field['settings_edit_form']['third_party_settings']['ds']['ft']['id']) && $field['settings_edit_form']['third_party_settings']['ds']['ft']['id'] == 'pattern';
     });
     $fields = array_keys($fields);
@@ -160,15 +173,18 @@ class Pattern extends DsFieldTemplateBase implements ContainerFactoryPluginInter
    * Pattern Display Suite field template plugin only supports actual fields.
    *
    * @param array $context
-   *    Current context.
+   *   Current context.
    *
    * @return bool
-   *    TRUE if supported, FALSE otherwise.
+   *   TRUE if supported, FALSE otherwise.
    */
-  protected function isSupportedField($context) {
+  protected function isSupportedField(array $context) {
     /** @var \Drupal\field\Entity\FieldConfig $field */
-    $field = $this->fieldManager->getFieldDefinitions($context['entity_type'], $context['bundle']);
-    return isset($field[$context['field_name']]);
+    if ($context['entity_type'] && $context['bundle']) {
+      $field = $this->fieldManager->getFieldDefinitions($context['entity_type'], $context['bundle']);
+      return isset($field[$context['field_name']]);
+    }
+    return FALSE;
   }
 
 }

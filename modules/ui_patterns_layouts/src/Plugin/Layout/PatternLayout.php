@@ -2,12 +2,14 @@
 
 namespace Drupal\ui_patterns_layouts\Plugin\Layout;
 
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Layout\LayoutDefault;
 use Drupal\Core\Layout\LayoutDefinition;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Plugin\PluginFormInterface;
 use Drupal\ui_patterns\UiPatternsManager;
+use Drupal\Core\Render\ElementInfoManagerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -18,11 +20,25 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class PatternLayout extends LayoutDefault implements PluginFormInterface, ContainerFactoryPluginInterface {
 
   /**
+   * Module Handler.
+   *
+   * @var \Drupal\Core\Extension\ModuleHandlerInterface
+   */
+  protected $moduleHandler = NULL;
+
+  /**
    * Pattern manager service.
    *
    * @var \Drupal\ui_patterns\UiPatternsManager
    */
   protected $patternManager = NULL;
+
+  /**
+   * The element info.
+   *
+   * @var \Drupal\Core\Render\ElementInfoManagerInterface
+   */
+  protected $elementInfo;
 
   /**
    * Constructs a LocalActionDefault object.
@@ -33,12 +49,18 @@ class PatternLayout extends LayoutDefault implements PluginFormInterface, Contai
    *   The plugin_id for the plugin instance.
    * @param \Drupal\Core\Layout\LayoutDefinition $plugin_definition
    *   The plugin implementation definition.
+   * @param \Drupal\Core\Render\ElementInfoManagerInterface $element_info
+   *   Element info object.
    * @param \Drupal\ui_patterns\UiPatternsManager $pattern_manager
-   *    Pattern manager service.
+   *   Pattern manager service.
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+   *   Module handler.
    */
-  public function __construct(array $configuration, $plugin_id, LayoutDefinition $plugin_definition, UiPatternsManager $pattern_manager) {
+  public function __construct(array $configuration, $plugin_id, LayoutDefinition $plugin_definition, ElementInfoManagerInterface $element_info, UiPatternsManager $pattern_manager, ModuleHandlerInterface $module_handler) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
+    $this->elementInfo = $element_info;
     $this->patternManager = $pattern_manager;
+    $this->moduleHandler = $module_handler;
   }
 
   /**
@@ -49,7 +71,9 @@ class PatternLayout extends LayoutDefault implements PluginFormInterface, Contai
       $configuration,
       $plugin_id,
       $plugin_definition,
-      $container->get('plugin.manager.ui_patterns')
+      $container->get('plugin.manager.element_info'),
+      $container->get('plugin.manager.ui_patterns'),
+      $container->get('module_handler')
     );
   }
 
@@ -74,7 +98,8 @@ class PatternLayout extends LayoutDefault implements PluginFormInterface, Contai
       '#type' => 'pattern',
       '#id' => $this->getPluginDefinition()->get('additional')['pattern'],
       '#fields' => $fields,
-    ];
+      '#variant' => $configuration['pattern']['variant'],
+    ] + $this->elementInfo->getInfo('pattern');
   }
 
   /**
@@ -84,6 +109,7 @@ class PatternLayout extends LayoutDefault implements PluginFormInterface, Contai
     return parent::defaultConfiguration() + [
       'pattern' => [
         'field_templates' => 'default',
+        'variant' => '',
       ],
     ];
   }
@@ -115,6 +141,17 @@ class PatternLayout extends LayoutDefault implements PluginFormInterface, Contai
       '#default_value' => $configuration['pattern']['field_templates'],
     ];
 
+    $pattern_id = $this->getPluginDefinition()->get('additional')['pattern'];
+    $definition = $this->patternManager->getDefinition($pattern_id);
+    if ($definition->hasVariants()) {
+      $form['pattern']['variant'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Variant'),
+        '#options' => $definition->getVariantsAsOptions(),
+        '#default_value' => $configuration['pattern']['variant'],
+      ];
+    }
+    $this->moduleHandler->alter('ui_patterns_layouts_display_settings_form', $form['pattern'], $definition, $configuration);
     return $form;
   }
 
@@ -135,7 +172,7 @@ class PatternLayout extends LayoutDefault implements PluginFormInterface, Contai
    * Remove default field template if "Only content" option has been selected.
    *
    * @param array $regions
-   *    Layout regions.
+   *   Layout regions.
    */
   protected function processOnlyContentFields(array &$regions) {
     foreach ($regions as $region_name => $region) {

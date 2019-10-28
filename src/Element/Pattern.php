@@ -27,6 +27,7 @@ class Pattern extends RenderElement {
         [$class, 'processLibraries'],
         [$class, 'processMultipleSources'],
         [$class, 'processFields'],
+        [$class, 'ensureVariant'],
         [$class, 'processUse'],
       ],
     ];
@@ -95,6 +96,27 @@ class Pattern extends RenderElement {
     else {
       $element['#markup'] = '';
     }
+
+    return $element;
+  }
+
+  /**
+   * Make sure that we never pass through a value that is not a string.
+   *
+   * This would prevent accidental assignments of a render array as variant
+   * which would break hook_ui_patterns_suggestions_alter().
+   *
+   * @param array $element
+   *   Render array.
+   *
+   * @return array
+   *   Render array.
+   */
+  public static function ensureVariant(array $element) {
+    if (!isset($element['#variant']) || !is_string($element['#variant'])) {
+      $element['#variant'] = '';
+    }
+
     return $element;
   }
 
@@ -181,9 +203,9 @@ class Pattern extends RenderElement {
    *   Render array.
    *
    * @return bool
-   *    TRUE or FALSE.
+   *   TRUE or FALSE.
    */
-  public static function hasFields($element) {
+  public static function hasFields(array $element) {
     return isset($element['#fields']) && !empty($element['#fields']) && is_array($element['#fields']);
   }
 
@@ -194,9 +216,9 @@ class Pattern extends RenderElement {
    *   Render array.
    *
    * @return bool
-   *    TRUE or FALSE.
+   *   TRUE or FALSE.
    */
-  public static function hasMultipleSources($element) {
+  public static function hasMultipleSources(array $element) {
     return isset($element['#multiple_sources']) && $element['#multiple_sources'] === TRUE;
   }
 
@@ -207,9 +229,9 @@ class Pattern extends RenderElement {
    *   Render array.
    *
    * @return bool
-   *    TRUE or FALSE.
+   *   TRUE or FALSE.
    */
-  public static function hasValidContext($element) {
+  public static function hasValidContext(array $element) {
     return isset($element['#context']) && is_array($element['#context']) && !empty($element['#context']['type']);
   }
 

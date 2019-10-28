@@ -57,8 +57,8 @@ class LibraryPattern extends PatternBase {
   public function getThemeImplementation() {
     $item = parent::getThemeImplementation();
     $definition = $this->getPluginDefinition();
-    $item[$definition['theme hook']] += $this->processCustomThemeHookProperty($definition);
     $item[$definition['theme hook']] += $this->processTemplateProperty($definition);
+    $item[$definition['theme hook']] += $this->processCustomThemeHookProperty($definition);
     return $item;
   }
 
@@ -66,10 +66,10 @@ class LibraryPattern extends PatternBase {
    * Process 'custom hook theme' definition property.
    *
    * @param \Drupal\ui_patterns\Definition\PatternDefinition $definition
-   *    Pattern definition array.
+   *   Pattern definition array.
    *
    * @return array
-   *    Processed hook definition portion.
+   *   Processed hook definition portion.
    */
   protected function processCustomThemeHookProperty(PatternDefinition $definition) {
     /** @var \Drupal\Core\Extension\Extension $module */
@@ -77,18 +77,36 @@ class LibraryPattern extends PatternBase {
     if (!$definition->hasCustomThemeHook() && $this->moduleHandler->moduleExists($definition->getProvider())) {
       $module = $this->moduleHandler->getModule($definition->getProvider());
       $return['path'] = $module->getPath() . '/templates';
+      if ($this->templateExists($definition->getBasePath(), $definition->getTemplate())) {
+        $return['path'] = str_replace($this->root, '', $definition->getBasePath());
+      }
     }
     return $return;
+  }
+
+  /**
+   * Weather template exists in given directory.
+   *
+   * @param string $directory
+   *   Directory full path.
+   * @param string $template
+   *   Template name, without default Twig extension.
+   *
+   * @return bool
+   *   Weather template exists in given directory.
+   */
+  protected function templateExists($directory, $template) {
+    return file_exists($directory . DIRECTORY_SEPARATOR . $template . '.html.twig');
   }
 
   /**
    * Process 'template' definition property.
    *
    * @param \Drupal\ui_patterns\Definition\PatternDefinition $definition
-   *    Pattern definition array.
+   *   Pattern definition array.
    *
    * @return array
-   *    Processed hook definition portion.
+   *   Processed hook definition portion.
    */
   protected function processTemplateProperty(PatternDefinition $definition) {
     $return = [];
